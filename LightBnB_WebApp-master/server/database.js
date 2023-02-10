@@ -1,6 +1,15 @@
 const properties = require('./json/properties.json');
 const users = require('./json/users.json');
 
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  user: 'vagrant',
+  password: '123',
+  host: 'localhost',
+  database: 'lightbnb'
+});
+
 /// Users
 
 /**
@@ -9,16 +18,23 @@ const users = require('./json/users.json');
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithEmail = function(email) {
-  let user;
-  for (const userId in users) {
-    user = users[userId];
-    if (user.email.toLowerCase() === email.toLowerCase()) {
-      break;
+  
+  return pool
+  .query(`SELECT *
+  FROM users
+  WHERE email = $1`, [email])
+  .then(result => {
+
+    if(result.rows.length < 1) {
+      return null
     } else {
-      user = null;
-    }
-  }
-  return Promise.resolve(user);
+      let user = result.rows[0]
+      return user
+    } 
+    
+  })
+  .catch(err => console.error('query error', err.stack)); 
+
 }
 exports.getUserWithEmail = getUserWithEmail;
 
@@ -26,9 +42,19 @@ exports.getUserWithEmail = getUserWithEmail;
  * Get a single user from the database given their id.
  * @param {string} id The id of the user.
  * @return {Promise<{}>} A promise to the user.
- */
+ */ 
 const getUserWithId = function(id) {
-  return Promise.resolve(users[id]);
+  return pool
+  .query(`SELECT *
+  FROM users
+  WHERE id = $1`, [id])
+  .then(result => {
+    let user = result.rows[0]
+    console.log("userid", user)
+    return user
+  })
+  .catch(err => console.error('query error', err.stack)); 
+ 
 }
 exports.getUserWithId = getUserWithId;
 
@@ -39,10 +65,25 @@ exports.getUserWithId = getUserWithId;
  * @return {Promise<{}>} A promise to the user.
  */
 const addUser =  function(user) {
-  const userId = Object.keys(users).length + 1;
+    
+    return pool
+    .query(`INSERT INTO users (
+      name, email, password) 
+      VALUES ($1, $2, $3)
+      RETURNING *;`, [user.name, user.email, user.password])
+    .then(result => {
+      
+      let newUser = result.rows[0]
+      console.log("user",newUser)
+      return newUser
+      
+    })
+    .catch(err => console.error('query error', err.stack)); 
+  
+  /*const userId = Object.keys(users).length + 1;
   user.id = userId;
   users[userId] = user;
-  return Promise.resolve(user);
+  return Promise.resolve(user);*/
 }
 exports.addUser = addUser;
 
@@ -54,7 +95,28 @@ exports.addUser = addUser;
  * @return {Promise<[{}]>} A promise to the reservations.
  */
 const getAllReservations = function(guest_id, limit = 10) {
-  return getAllProperties(null, 2);
+
+
+return pool
+    .query(`SELECT reservations.id, properties.title, properties.cost_per_night, reservations.start_date, 
+    reservations.end_date,properties.number_of_bathrooms, properties.number_of_bedrooms,
+    properties.parking_spaces,properties.thumbnail_photo_url, avg(rating) as average_rating
+    FROM reservations
+    JOIN properties ON reservations.property_id = properties.id
+    JOIN property_reviews ON properties.id = property_reviews.property_id
+    WHERE reservations.guest_id = $1
+    GROUP BY properties.id, reservations.id
+    ORDER BY reservations.start_date
+    LIMIT $2;`, [guest_id, limit ])
+    .then(result => {
+      let reservations = result.rows
+      console.log(reservations)
+      return reservations
+      
+    })
+    .catch(err => console.error('query error', err.stack)); 
+
+  
 }
 exports.getAllReservations = getAllReservations;
 
@@ -67,11 +129,17 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 const getAllProperties = function(options, limit = 10) {
-  const limitedProperties = {};
-  for (let i = 1; i <= limit; i++) {
-    limitedProperties[i] = properties[i];
-  }
-  return Promise.resolve(limitedProperties);
+  getAllReservations(5)
+  return pool
+  .query(`SELECT * 
+  FROM properties
+  LIMIT $1`, [limit])
+  .then(result => {
+    
+    return result.rows
+  })
+  .catch(err => console.error('query error', err.stack)); 
+  
 }
 exports.getAllProperties = getAllProperties;
 

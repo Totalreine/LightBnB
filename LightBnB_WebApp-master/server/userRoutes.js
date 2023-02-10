@@ -30,12 +30,15 @@ module.exports = function(router, database) {
         return user;
       }
       return null;
+      
     });
   }
   exports.login = login;
 
   router.post('/login', (req, res) => {
+    
     const {email, password} = req.body;
+    
     login(email, password)
       .then(user => {
         if (!user) {
@@ -61,6 +64,8 @@ module.exports = function(router, database) {
     }
 
     database.getUserWithId(userId)
+
+
       .then(user => {
         if (!user) {
           res.send({error: "no user with that id"});
